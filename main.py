@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 # ---------- 配置 ----------
 API_BASE = "https://panel.godlike.host"
 LOGIN_URL = f"{API_BASE}/auth/login"
-OUTPUT_DIR = Path("scripts/Godlike")
+OUTPUT_DIR = Path("Godlike")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CN_TZ = timezone(timedelta(hours=8))
 
