@@ -1,179 +1,194 @@
-# Godlike 自动续期脚本
+# Godlike 自动续期脚本（登录版 + 外链版）
 
-# ⭐ 觉得有用？给个 Star 支持一下！
+本仓库提供两个 **Godlike 免费 Minecraft 服务器** 自动续期脚本，均基于 GitHub Actions，可按需选择或同时启用。
+
+- **登录续期版** (`Godlike_Renew.yml`)  
+  使用邮箱/密码登录面板，自动点击续期按钮，支持 Cookie 缓存，适合需要完整控制面板操作的场景。
+
+- **外链续期版** (`Godlike_URL_Renew.yml`)  
+  使用服务器的公开续期链接，自动处理 reCAPTCHA 音频验证，支持 IP 封锁自动更换 WARP，**续期后可自动开机**。无需账号密码，一个链接即可续期。
+
+---
+
+## 🔍 哪个版本适合你？
+
+| 需求 | 推荐使用 |
+|------|---------|
+| 有 Godlike 账号密码，希望一套配置管所有服务器 | 登录续期版 |
+| 不想暴露账号密码，只想续期个别服务器 | 外链续期版 |
+| 需要续期后自动开机 | 外链续期版（勾选 Start server on renewal） |
+| 账号开启了二次验证或登录页面复杂 | 外链续期版（绕过登录） |
+| 多账号、需要 Cookie 缓存减少浏览器开销 | 登录续期版 |
+
+> 📌 两个工作流完全独立，可以 **同时启用**，互不影响。
+
+---
+
+## ✨ 功能对比
+
+| 功能 | 登录续期版 | 外链续期版 |
+|------|:---:|:---:|
+| 多账号/多服务器 | ✅（最多5个账号） | ✅（任意数量 ID） |
+| 记录 Cookie 并自动复用 | ✅ | ❌ |
+| 代理支持 | ✅（VLESS/VMess/Trojan等） | 不需要（内置 WARP 切换） |
+| 自动处理 reCAPTCHA | ❌ | ✅（音频识别） |
+| 续期后自动开机 | ❌ | ✅（需在面板勾选） |
+| 24h上限/冷却期识别 | ✅ | ✅ |
+| Telegram 通知 + 截图 | ✅ | ✅ |
+| 手动触发时可指定部分对象 | ❌ | ✅ |
+
+---
+
+# 一、登录续期版 · 配置与使用
+
 > 注册地址：[https://godlike.host/cart-free](https://godlike.host/cart-free)  
-> ⚠️忘记密码？在此重置：[https://panel.godlike.host/auth/password](https://panel.godlike.host/auth/password)
+> ⚠️ 忘记密码？在此重置：[https://panel.godlike.host/auth/password](https://panel.godlike.host/auth/password)
 
-自动为 **Godlike Host** 免费 Minecraft 服务器续期 90 分钟的 GitHub Actions 脚本。支持多账号、Cookie / 密码自动切换、Cookie 自动回写、多种代理协议，并通过 Telegram 发送带截图的成功/失败通知。
+自动登录 Godlike 面板并续期 90 分钟。支持多账号、Cookie 自动维护、多种代理协议，并通过 Telegram 发送带截图的成功/失败通知。
 
-## ✨ 功能特性
+## 1.1 配置 Secrets
 
-- ✅ 多账号支持（最多 5 个）
-- ✅ 智能登录：优先使用持久化 Cookie，失效自动回退至 Playwright 模拟登录
-- ✅ Cookie 自动维护：密码登录成功后自动将 Cookie 加密回写至 GitHub Secrets，下次可直接复用
-- ✅ 续期保护：检测服务器是否已过期，过期则跳过续期并通知
-- ✅ 支持多种代理协议（VLESS / VMess / Trojan / Shadowsocks / SOCKS5）
-- ✅ Telegram 通知带截图（成功 / 失败均有完整页面截图）
-- ✅ 工作流日志脱敏，TG 通知显示真实账号/服务器信息
-- ✅ 错误快照自动上传至 Artifacts 便于调试
-
-
-## 📋 前置要求
-
-### 1. GitHub Secrets 配置
-
-在仓库 `Settings` → `Secrets and variables` → `Actions` 中添加以下 Secrets：
+在仓库 `Settings` → `Secrets and variables` → `Actions` 中添加：
 
 | Secret 名称 | 必填 | 说明 | 示例 |
 |------------|:---:|------|------|
-| `GODLIKE_1` | ✅ | 主账号，格式见下方 | `admin@example.com-----MyPassword` |
-| `GODLIKE_2` ~ `GODLIKE_5` | ❌ | 额外账号（有多个账号时填写） | 同上 |
+| `GODLIKE_1` | ✅ | 主账号，格式 `邮箱-----密码` | `admin@example.com-----MyPassword` |
+| `GODLIKE_2` ~ `GODLIKE_5` | ❌ | 额外账号（最多到5） | 同上 |
 | `TG_BOT_TOKEN` | ❌ | Telegram Bot Token | `1234567890:AAE...` |
 | `TG_CHAT_ID` | ❌ | 接收通知的 Chat ID | `123456789` |
 | `REPO_TOKEN` | ❌ | 用于自动回写 Cookie 的 GitHub PAT | `ghp_xxxxxxxxxxxx` |
-| `PROXY_NODE` | ❌ | 代理节点链接 | 见下方代理格式 |
+| `PROXY_NODE` | ❌ | 代理节点链接（可选） | 见代理格式说明 |
 
-### 2. GODLIKE 账号格式
+账号 Secret 首次只需提供邮箱和密码，脚本会在登录成功后自动将 Cookie 追加到 Secret 末尾，后续优先使用 Cookie。
 
-每个 Secret 的格式为：`用户名/邮箱-----密码`
-
-```
-admin@example.com-----MyP@ssw0rd
-myusername-----AnotherPassword
-```
-
-首次运行时只需提供用户名和密码。脚本会在登录成功后自动将 Cookie 追加到末尾，变为：
-```
-admin@example.com-----MyP@ssw0rd-----base64编码的cookie列表
-```
-
-后续运行将优先使用 Cookie 登录，减少浏览器开销。
-
-### 3. 代理节点格式（可选）
-
-支持以下代理协议，留空则使用直连：
+**代理节点格式（可选）：**
 
 | 协议 | 示例 |
 |------|------|
-| VLESS | `vless://uuid@host:port?type=ws&security=tls&sni=example.com` |
-| VMess | `vmess://eyJhZGQiOiIxLjIuMy40IiwidiI6IjIiLCJwc...` |
-| Trojan | `trojan://password@host:port?type=ws&sni=example.com` |
-| Shadowsocks | `ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@host:port` |
-| SOCKS5 | `socks5://user:pass@host:port` 或 `socks5://host:port` |
+| VLESS | `vless://uuid@host:port?type=ws&security=tls&sni=...` |
+| VMess | `vmess://eyJhZGQiOi...` |
+| Trojan | `trojan://password@host:port?type=ws&sni=...` |
+| Shadowsocks | `ss://YWVzLTI1Ni1nY206...` |
+| SOCKS5 | `socks5://user:pass@host:port` |
 
-### 4. Telegram 通知配置（可选）
+## 1.2 使用方法
 
-1. 向 [@BotFather](https://t.me/BotFather) 发送 `/newbot` 创建 Bot，获取 Token。
-2. 向 [@userinfobot](https://t.me/userinfobot) 发送任意消息，获取你的 Chat ID。
-3. 将 Token 和 Chat ID 填入上述 Secrets。
+- **定时运行**：默认每 3 小时执行一次（UTC），可在 `.github/workflows/Godlike_Renew.yml` 中修改 `cron`。
+- **手动触发**：`Actions` → `Godlike 续期` → `Run workflow`。
+- **API 调用**：
+  ```bash
+  curl -X POST \
+    -H "Authorization: Bearer ghp_xxxx" \
+    -H "Accept: application/vnd.github.v3+json" \
+    https://api.github.com/repos/你的用户名/仓库名/actions/workflows/Godlike_Renew.yml/dispatches \
+    -d '{"ref":"main"}'
+  ```
 
+# 二、外链续期版 · 配置与使用
 
-## 🚀 使用方法
+> 注册地址：[https://godlike.cool](https://godlike.cool)  
+> 管理面板：[https://panel.godlike.host](https://panel.godlike.host)
 
-### 方法 1：定时自动运行
+基于公开续期页面，自动处理 reCAPTCHA 音频验证、IP 封锁自动切换 WARP，续期后可按需开机。一个 ID 对应一台服务器，无需提供账号密码。
 
-Fork 仓库并配置 Secrets 后，工作流默认每 3 小时运行一次（UTC 时间），自动完成续期。
+## 2.1 为服务器开启外链续期并获取 ID
 
-如果需要修改频率，编辑 `.github/workflows/godlike.yml`：
+1. 登录 [Godlike 面板](https://panel.godlike.host)，点击要续期的服务器。
+2. 左侧菜单 → **Public Renewal**。
+3. 在 **URL** 输入框中填入自定义标识（**强烈建议直接使用服务器 ID**，如地址栏中的 `8xxxabcd`）。
+4. 勾选 **Start server on renewal**（续期后自动开机）。
+5. 点击 **Save Renewal Page**。
 
-```yaml
-schedule:
-  - cron: '0 */3 * * *'      # 每3小时
-```
+保存后，续期链接为 `https://godlike.cool/你填的ID`。  
+**将此 ID 填入 GitHub Secrets 的 `GODLIKE_ID` 字段**。
 
-常用 cron 表达式：
-- `0 */3 * * *` — 每 3 小时
+## 2.2 配置 Secrets
 
-### 方法 2：手动触发（GitHub 网页）
+| Secret 名称 | 必填 | 说明 | 示例 |
+|------------|:---:|------|------|
+| `GODLIKE_ID` | ✅ | 上一步设置的 ID，多个用换行分隔 | `8xxxabcd`<br>`xyz789` |
+| `TG_BOT_TOKEN` | ❌ | Telegram Bot Token | `123456:ABC-...` |
+| `TG_CHAT_ID` | ❌ | 接收消息的 Chat ID | `123456789` |
 
-1. 进入仓库的 `Actions` 页面
-2. 选择 `Godlike 续期` 工作流
-3. 点击 `Run workflow`
-4. 点击绿色的 `Run workflow` 按钮
+> 如果不配置 Telegram 相关 Secret，脚本仍会正常续期，仅不发通知。
 
-### 方法 3：API 调用（可用于面板/定时任务）
+## 2.3 使用方法
 
-```bash
-curl -X POST \
-  -H "Authorization: Bearer ghp_xxxxxxxxxxxxxxxxxxxx" \
-  -H "Accept: application/vnd.github.v3+json" \
-  https://api.github.com/repos/你的用户名/你的仓库名/actions/workflows/Godlike_Renew.yml/dispatches \
-  -d '{"ref":"main"}'
-```
+- **定时运行**：默认每 90 分钟执行一次（UTC），可在 `Godlike_URL_Renew.yml` 工作流文件中调整。
+- **手动触发**：`Actions` → `Godlike URL 续期` → `Run workflow`，可以在 **指定ID** 输入框中填写要续期的 ID（逗号或换行分隔），留空则处理全部 `GODLIKE_ID`。
+- **API 调用**：
+  ```bash
+  curl -X POST \
+    -H "Authorization: Bearer ghp_xxxx" \
+    -H "Accept: application/vnd.github.v3+json" \
+    https://api.github.com/repos/你的用户名/仓库名/actions/workflows/Godlike_URL_Renew.yml/dispatches \
+    -d '{"ref":"main", "inputs": {"accounts": "8xxxabcd"}}'
+  ```
 
-一行版：
-```bash
-curl -s -X POST "https://api.github.com/repos/你的用户名/你的仓库名/actions/workflows/Godlike_Renew.yml/dispatches" -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ghp_xxxxxxxxxxxxxxxxxxxx" -d '{"ref":"main"}'
-```
+# 三、Telegram 通知配置（通用）
 
+两个脚本共用以下 Secrets 来发送 Telegram 通知：
 
-## 🐛 常见问题
+- `TG_BOT_TOKEN`：向 [@BotFather](https://t.me/BotFather) 发送 `/newbot` 创建机器人获取。
+- `TG_CHAT_ID`：向 [@userinfobot](https://t.me/userinfobot) 发送任意消息获取。
 
-### 1. 登录失败
+配置后，续期成功、24h 上限、冷却期、失败都会推送带截图的图文消息。
 
-**原因**：
-- 账号密码错误（忘记密码可[在此重置](https://panel.godlike.host/auth/password)）
-- “Through login/password” 切换按钮未出现（页面结构已变）
-- 网络/代理问题
+---
 
-**解决**：
-- 检查 `GODLIKE_X` Secret 格式是否正确
-- 查看 Actions 日志中的截图（在 Artifacts 中下载）
-- 尝试配置代理（`PROXY_NODE`）
-- 登录页可能会更新，若持续失败可提交 Issue
+# 🐛 常见问题（整合）
 
-### 2. 续期失败
+## 登录版常见问题
 
-**原因**：
-- 服务器已过期（无法续期）
-- 广告按钮未加载（页面改版或代理问题）
-- 续期冷却期内
+**1. 登录失败**
+- 检查 `GODLIKE_X` 格式（邮箱-----密码）。
+- 尝试在 Actions 的 Artifacts 中下载截图排查。
+- 如“Through login/password”按钮未出现，页面可能已更新，请提交 Issue。
 
-**解决**：
-- 检查截图确认具体原因
-- 如果冷却，脚本会在下次运行时自动重试
-- 更新脚本中的按钮选择器（参考 Issue 讨论）
+**2. Cookie 回写失败**
+- 确保 `REPO_TOKEN` 已创建且具有 `repo` 和 `workflow` 权限。
+- 若不需要 Cookie 缓存，可忽略该警告。
 
-### 3. Telegram 通知未收到
+## 外链版常见问题
 
-**原因**：
-- Bot Token 或 Chat ID 错误
-- 你未向 Bot 发送过消息（需先在 Telegram 中向 Bot 发送 `/start`）
-- 消息被 Telegram 限制
+**3. 如何获取服务器 ID？**
+- 面板地址栏中的 `https://panel.godlike.host/server/8459d9bd`，`8459d9bd` 为服务器 ID。  
+- 但在 `GODLIKE_ID` 中填写的是你在 **Public Renewal 页面自己设定的 URL 标识**，建议与服务器 ID 保持一致。
 
-**解决**：
-- 在 Telegram 中向 Bot 发送 `/start`
-- 验证 Secrets 配置是否正确
-- 检查 Actions 日志中的错误信息
+**4. reCAPTCHA 识别失败**
+- 音频识别会重试最多 3 次；若 IP 被 Google 标记，脚本会通过 WARP 自动换 IP，每个 ID 最多尝试 20 次。
 
-### 4. Cookie 回写失败
+**5. “24小时上限”或“冷却期”是什么意思？**
+- 24h 上限：服务器已攒满 24 小时运行时间，无法再增加，脚本视为成功并跳过。
+- 6 分钟冷却期：同一服务器续期后 6 分钟内无法再次续期，脚本会跳过，等待下次调度。
 
-**原因**：
-- 缺少 `REPO_TOKEN` 或 Token 权限不足
-- `REPO_TOKEN` 未勾选 `workflow` 和 `repo` 权限
+**6. 运行时间很长是否正常？**
+- 正常，单个 ID 约 2-5 分钟，若触发 IP 切换会更久，GitHub Actions 最长允许 6 小时。
 
-**解决**：
-- 创建具有 `repo` 和 `workflow` 权限的 GitHub Personal Access Token (classic) 并填入 `REPO_TOKEN`
-- 若不关心回写，可忽略该警告，脚本仍正常运行
+## 通用问题
 
-### 5. 截图在哪里查看？
+**7. 截图在哪里查看？**
+- 每次 Actions 运行结束，底部的 **Artifacts** 区域可下载截图包（登录版仅在失败时上传，外链版每次都会上传）。
 
-- 截图仅在失败时自动上传（需在工作流中配置 `if: failure()`）。
-- 在 Actions 运行完成后，向下滚动至 `Artifacts` 区域，下载 `error-screenshots` 压缩包即可查看所有截图。
+**8. 没有收到 Telegram 通知？**
+- 确认 `TG_BOT_TOKEN` 和 `TG_CHAT_ID` 正确。
+- 先在 Telegram 给 Bot 发送 `/start` 激活会话。
 
+---
 
-## 🔒 安全建议
+# 🔒 安全建议
 
-1. ✅ 使用 **GitHub Secrets** 存储所有敏感信息
-2. ✅ `REPO_TOKEN` 仅授予 `repo` 和 `workflow` 权限
-3. ✅ 日志中账号/服务器均自动脱敏，TG 通知为私人可见
-4. ✅ 定期更换密码并更新 Secret
+- 所有敏感信息均存储在 GitHub Secrets 中，Actions 日志已脱敏。
+- `REPO_TOKEN` 仅授予 `repo` 和 `workflow` 权限（Classic Token）。
+- 外链版无需提供账号密码，更安全。
+- 定期更新 Fork 仓库以获取最新修复。
 
+---
 
-## 📄 许可证
+# 📄 许可证
 
 MIT License
 
 ---
 
-**⚠️ 免责声明**：本脚本仅供学习交流使用，使用者需遵守 Godlike Host 的服务条款。因使用本脚本造成的任何问题，作者不承担任何责任。
+**⚠️ 免责声明**：本脚本仅供学习交流使用，使用者需遵守 Godlike 的服务条款。因使用本脚本造成的任何问题，作者不承担任何责任。
